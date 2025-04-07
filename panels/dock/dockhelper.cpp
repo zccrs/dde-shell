@@ -290,4 +290,5 @@ QScreen *DockWakeUpArea::screen()
 {
     return m_screen;
 }
+
 }

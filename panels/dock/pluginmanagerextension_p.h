@@ -11,6 +11,8 @@
 #include <QtWaylandCompositor/QWaylandResource>
 #include <cstdint>
 
+#include <QtWaylandCompositor/QWaylandSurface>
+
 #include "qwayland-server-fractional-scale-v1.h"
 #include "qwayland-server-plugin-manager-v1.h"
 
@@ -269,3 +271,17 @@ private:
 
 Q_COMPOSITOR_DECLARE_QUICK_EXTENSION_CLASS(PluginManager)
 Q_COMPOSITOR_DECLARE_QUICK_EXTENSION_CLASS(PluginScaleManager)
+
+
+class DockScreenshotHelper : public QObject
+{
+    Q_OBJECT
+    QML_SINGLETON
+    QML_ELEMENT
+
+public:
+    Q_INVOKABLE bool saveSurfaceToFile(QWaylandSurface *surface, const QString &filePath);
+
+    explicit DockScreenshotHelper(QObject *parent = nullptr);
+    ~DockScreenshotHelper() override = default;
+};

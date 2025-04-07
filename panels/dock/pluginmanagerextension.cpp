@@ -15,6 +15,12 @@
 #include <QtWaylandCompositor/QWaylandResource>
 #include <QtWaylandCompositor/QWaylandCompositor>
 
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
+#include <QOpenGLTexture>
+#include <QtWaylandCompositor/qwaylandbufferref.h>
+#include <QtWaylandCompositor/QWaylandView>
+
 #include <QJsonObject>
 #include <QJsonParseError>
 
@@ -44,7 +50,7 @@ void PluginScaleManager::setPluginScale(const uint32_t &scale)
     auto outputs = m_compositor->outputs();
     std::for_each(outputs.begin(), outputs.end(), [this](auto *output) {
         // 120 is base of fractional scale.
-        output->setScaleFactor(std::ceil(m_scale / 120));
+        output->setScaleFactor(std::ceil(m_scale / 120.0));
     });
 
     Q_EMIT pluginScaleChanged(m_scale);
@@ -64,7 +70,7 @@ void PluginScaleManager::initialize()
     init(compositor->display(), 1);
     m_compositor = compositor;
     connect(compositor, &QWaylandCompositor::outputAdded, this, [this](auto *output) {
-        output->setScaleFactor(std::ceil(m_scale / 120));
+        output->setScaleFactor(std::ceil(m_scale / 120.0));
     });
 }
 
@@ -678,4 +684,105 @@ QString PluginManager::popupMinHeightMsg() const
     obj[dock::MSG_DATA] = m_popupMinHeight;
 
     return toJson(obj);
+}
+
+DockScreenshotHelper::DockScreenshotHelper(QObject *parent)
+    : QObject(parent)
+{
+}
+
+bool DockScreenshotHelper::saveSurfaceToFile(QWaylandSurface *surface, const QString &filePath)
+{
+    if (!surface) {
+        qWarning() << "Invalid surface provided";
+        return false;
+    }
+
+    auto view = surface->primaryView();
+    if (!view) {
+        qWarning() << "Surface has no primary view";
+        return false;
+    }
+
+    QWaylandBufferRef buffer = view->currentBuffer();
+    if (buffer.isNull()) {
+        qWarning() << "Surface has no valid buffer";
+        return false;
+    }
+    if (!buffer.hasContent()) {
+        qWarning() << "Surface has no buffer content";
+        return false;
+    }
+
+    QImage image;
+    if (buffer.isSharedMemory()) {
+        image = buffer.image();
+        if (image.isNull()) {
+            qWarning() << "Failed to get image from shared memory buffer";
+            return false;
+        }
+    } else {
+        // 尝试获取OpenGL纹理
+        QOpenGLTexture *texture = buffer.toOpenGLTexture();
+        if (texture) {
+            QOpenGLContext *context = QOpenGLContext::currentContext();
+            if (!context) {
+                qWarning() << "No current OpenGL context available";
+                return false;
+            }
+
+            QOpenGLFunctions *functions = context->functions();
+            if (!functions) {
+                qWarning() << "Failed to get OpenGL functions";
+                return false;
+            }
+
+            int width = buffer.size().width();
+            int height = buffer.size().height();
+            image = QImage(width, height, QImage::Format_RGBA8888);
+
+            // 创建帧缓冲对象(FBO)用于从纹理读取像素
+            GLuint fbo;
+            functions->glGenFramebuffers(1, &fbo);
+            functions->glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+            
+            // 将纹理附加到帧缓冲
+            functions->glBindTexture(GL_TEXTURE_2D, texture->textureId());
+            functions->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture->textureId(), 0);
+            
+            // 从帧缓冲中读取像素数据
+            functions->glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, image.bits());
+            
+            // 清理
+            functions->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            functions->glDeleteFramebuffers(1, &fbo);
+            functions->glBindTexture(GL_TEXTURE_2D, 0);
+            
+            // OpenGL坐标系与QImage坐标系不同，需要垂直翻转图像
+            image = image.mirrored(false, true);
+
+            if (image.isNull()) {
+                qWarning() << "Failed to get image from OpenGL texture";
+                return false;
+            }
+        } else {
+            qWarning() << "Unsupported buffer type";
+            return false;
+        }
+    }
+
+    // 确保目录存在
+    QFileInfo fileInfo(filePath);
+    QDir dir;
+    if (!dir.exists(fileInfo.absolutePath())) {
+        dir.mkpath(fileInfo.absolutePath());
+    }
+
+    if (image.save(filePath)) {
+        qDebug() << "Surface saved to" << filePath;
+        return true;
+    } else {
+        qWarning() << "Failed to save surface to" << filePath;
+        return false;
+    }
 }

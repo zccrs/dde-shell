@@ -117,6 +117,7 @@ Item {
 
         PluginScaleManager{
             id: pluginScaleManager
+            // pluginScale: 120 * 1.25
             pluginScale: dockCompositor.panelScale * 120
         }
     }

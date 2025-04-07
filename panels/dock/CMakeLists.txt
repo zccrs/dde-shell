@@ -30,7 +30,7 @@ file(
     waylanddockhelper.cpp
     loadtrayplugins.h
     loadtrayplugins.cpp
-)
+    )
 
 # Old dbus interface compatible
 qt_add_dbus_adaptor(dock_panel_sources
@@ -71,6 +71,7 @@ target_link_libraries(dockpanel PRIVATE
     PkgConfig::WaylandClient
     Qt${QT_VERSION_MAJOR}::WaylandClient
     Qt${QT_VERSION_MAJOR}::WaylandClientPrivate
+    Qt${QT_VERSION_MAJOR}::WaylandCompositor
     Qt${QT_VERSION_MAJOR}::Widgets
     dde-shell-frame
 )

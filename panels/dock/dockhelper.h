@@ -8,6 +8,7 @@
 #include "dockpanel.h"
 
 #include <QObject>
+#include <QtWaylandCompositor/QWaylandSurface>
 
 namespace dock {
 class DockWakeUpArea;
@@ -71,5 +72,6 @@ protected:
     QScreen *m_screen;
     DockHelper *m_helper;
 };
-}
+
+} // namespace dock
 
